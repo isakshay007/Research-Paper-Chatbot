@@ -24,7 +24,7 @@ image = Image.open("./logo/lyzr-logo.png")
 st.image(image, width=150)
 
 # App title and introduction
-st.title("Research Paper ChatBot📝")
+st.title("Research Paper Assistant📝")
 st.markdown("### Built using Lyzr SDK🚀")
 st.markdown(
 "Dive into the world of research papers effortlessly: Upload your PDF, pose your questions, and let our ChatBot illuminate your path to discovery!")
