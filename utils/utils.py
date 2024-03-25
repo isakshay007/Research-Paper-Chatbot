@@ -13,15 +13,14 @@ def remove_existing_files(directory):
         except Exception as e:
             st.error(f"Error while removing existing files: {e}")
 
-
 def get_files_in_directory(directory):
-    # This function help us to get the file path along with filename.
+    # This function helps us to get the file path along with filename.
     files_list = []
 
     if os.path.exists(directory) and os.path.isdir(directory):
         for filename in os.listdir(directory):
             file_path = os.path.join(directory, filename)
-            
+
             if os.path.isfile(file_path):
                 files_list.append(file_path)
 
@@ -34,4 +33,4 @@ def save_uploaded_file(uploaded_file):
     file_path = os.path.join('data', uploaded_file.name)
     with open(file_path, "wb") as file:
         file.write(uploaded_file.read())
-    st.success("File uploaded successfully")
+    return file_path
