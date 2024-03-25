@@ -1,23 +1,20 @@
 import os
-from PIL import Image
-from pathlib import Path
 import streamlit as st
-from utils import utils
-from lyzr import DataConnector, DataAnalyzr
-import pandas as pd
+from PIL import Image
+from lyzr import ChatBot
+from utils import utils  # Assuming utils.py contains the function save_uploaded_file
 
 # Set OpenAI API key
 os.environ["OPENAI_API_KEY"] = st.secrets["apikey"]
-# create directory if it doesn't exist
-data = "data"
-plot = 'plot'
-os.makedirs(data, exist_ok=True)
-os.makedirs(plot, exist_ok=True)
 
-# Setup your config
+# Create directory if it doesn't exist
+data = "data"
+os.makedirs(data, exist_ok=True)
+
+# Setup Streamlit page config
 st.set_page_config(
     page_title="Lyzr",
-    layout="centered",  # or "wide" 
+    layout="centered",
     initial_sidebar_state="auto",
     page_icon="./logo/lyzr-logo-cut.png"
 )
@@ -27,13 +24,13 @@ image = Image.open("./logo/lyzr-logo.png")
 st.image(image, width=150)
 
 # App title and introduction
-st.title("MultiFile Analyzer🗃️")
-st.markdown("### Built using Lyzr🚀")
-st.markdown("A comprehensive tool tailored for efficiently analyzing and deriving insights from datasets across diverse sources of files.")
+st.title("Research Paper ChatBot📝")
+st.markdown("### Built using Lyzr SDK🚀")
+st.markdown(
+"Dive into the world of research papers effortlessly: Upload your PDF, pose your questions, and let our ChatBot illuminate your path to discovery!")
 
 # Custom function to style the app
 def style_app():
-    # You can put your CSS styles here
     st.markdown("""
     <style>
     .app-header { visibility: hidden; }
@@ -42,110 +39,79 @@ def style_app():
     </style>
     """, unsafe_allow_html=True)
 
-# Automate EDA Application
-def data_uploader():
-    st.subheader("Upload your files here")
+# Function to initialize ChatBot for PDF files
+def initialize_chatbot(file_path):
+    vector_store_params = {
+        "vector_store_type": "WeaviateVectorStore",
+        "url": "https://my-qa-tdacvc8s.weaviate.network",
+        "api_key": "JKH1RRtpqOMRZ5cZ4L5rxcQKBMIAUhlv8A4Hj",
+        "index_name": "Ronaldo"
+    }
+    chatbot = ChatBot.pdf_chat(input_files=[file_path], vector_store_params=vector_store_params)
+    return chatbot
 
-    # Dictionary to map file types to their respective extensions
-    file_types = {"CSV": ["csv"], "Excel": ["xlsx", "xls"], "JSON": ["json"]}
+# Function to integrate ChatBot for PDF files
+def pdf_chat_integration():
 
-    # File type selection
-    file_type = st.radio("Select file type:", list(file_types.keys()))
+    # Upload PDF file
+    uploaded_file = st.file_uploader("Upload PDF file", type=['pdf'])
+    if uploaded_file is not None:  # Check if file is uploaded
+        st.success(f"File uploaded: {uploaded_file.name} (PDF)")
+        st.markdown("### Pre-Prompts:")
+        prompts = [
+            "What are the main findings of this paper?",
+            "What methodology was used in this research?",
+            "Can you summarize the key points discussed in the paper?",
+            "What are the implications of the research findings?"
+        ]
+        
+        # Display pre-defined prompts as buttons
+        col1, col2 = st.columns(2)
+        for i, prompt in enumerate(prompts):
+            if i % 2 == 0:
+                button = col1.button(prompt, key=f"button_{i}")
+            else:
+                button = col2.button(prompt, key=f"button_{i}")
 
-    # Upload file based on selection
-    uploaded_file = st.file_uploader(f"Choose {file_type} file", type=file_types[file_type])
+            # Check if button is clicked
+            if button:
+                st.text("Processing...")
+                file_path = utils.save_uploaded_file(uploaded_file)  # Save uploaded file
+                if file_path is not None:  # Check if file is saved successfully
+                    print("File saved at:", file_path)  # Print file path for debugging
+                    chatbot = initialize_chatbot(file_path)
+                    if chatbot:
+                        response = chatbot.chat(prompt)  # Use selected prompt
+                        st.text("Answer:")
+                        st.write(response.response)
+                    else:
+                        st.error("Failed to initialize chatbot. Please try again.")
 
-    # Process uploaded file
-    if uploaded_file is not None:
-        utils.save_uploaded_file(uploaded_file)
+        question = st.text_input("Ask a question about the document:")
+        if st.button("Get Answer"):
+            st.text("Processing...")
+            file_path = utils.save_uploaded_file(uploaded_file)  # Save uploaded file
+            if file_path is not None:  # Check if file is saved successfully
+                print("File saved at:", file_path)  # Print file path for debugging
+                chatbot = initialize_chatbot(file_path)
+                if chatbot:
+                    response = chatbot.chat(question)  # Corrected method call
+                    st.text("Answer:")
+                    st.write(response.response)
+                else:
+                    st.error("Failed to initialize chatbot. Please try again.")
     else:
-        utils.remove_existing_files(data)
-        utils.remove_existing_files(plot)
-
-
-def analyzr():
-    # Get list of files in the data directory
-    files = file_checker()
-
-    # Check if any files are available
-    if len(files) > 0:
-        # Assuming the first file in the list is the desired file
-        file_path = files[0]
-
-        # Determine file extension
-        file_extension = Path(file_path).suffix.lower()
-
-        # Load data based on file type
-        if file_extension == '.csv':
-            dataframe = DataConnector().fetch_dataframe_from_csv(file_path=Path(file_path))
-        elif file_extension in ('.xlsx', '.xls'):
-            dataframe = DataConnector().fetch_dataframe_from_excel(file_path=Path(file_path))
-        elif file_extension == '.json':
-            dataframe = pd.read_json(file_path)  # Load JSON file using pandas
-        else:
-            st.error("Unsupported file format. Please upload a CSV, Excel, or JSON file.")
-            return None
-
-        # Initialize DataAnalyzr instance
-        analyzr_instance = DataAnalyzr(df=dataframe, api_key=st.secrets["apikey"])
-        return analyzr_instance
-    else:
-        st.error("Please upload a CSV, Excel, or JSON file.")
-        return None
-
-def file_checker():
-    file = []
-    for filename in os.listdir(data):
-        file_path = os.path.join(data, filename)
-        file.append(file_path)
-
-    return file
-
-# Function to display the dataset description
-def display_description(analyzr):
-    description = analyzr.dataset_description()
-    if description is not None:
-        st.subheader("Dataset Description:")
-        st.write(description)
-
-# Function to display queries
-def display_queries(analyzr):
-    queries = analyzr.ai_queries_df()
-    if queries is not None:
-        st.subheader("These Queries you can run on the data:")
-        st.write(queries)
-
-
+        st.warning("Please upload a PDF file.")
 
 if __name__ == "__main__":
     style_app()
-    st.sidebar.title("File Analyzer Section")
-    selection = st.sidebar.radio("Go to", ["Data", "Analysis"])
-
-    if selection == "Data":
-        data_uploader()
-    elif selection == "Analysis":
-        file = file_checker()
-        if len(file) > 0:
-            analyzr = analyzr()
-
-            # Create buttons for the options
-            if st.button("Data Description"):
-                display_description(analyzr)
-            if st.button("Generate Queries"):
-                display_queries(analyzr)        
-        
-        else:
-            st.error("Please upload a CSV file")
-                
-    
+    pdf_chat_integration()
     with st.expander("ℹ️ - About this App"):
         st.markdown("""
-        This app uses Lyzr DataAnalyzr agent to generate analysis on data. With DataAnalyzr, you can streamline the complexity of data analytics into a powerful, intuitive, and conversational interface that lets you command data with ease. For any inquiries or issues, please contact Lyzr.
-        
+This app utilizes Lyzr Chatbot agent to generate analysis on data, streamlining the complexity of data analytics into a powerful, intuitive, and conversational interface. For any inquiries or issues, please contact Lyzr.
+    
         """)
         st.link_button("Lyzr", url='https://www.lyzr.ai/', use_container_width = True)
         st.link_button("Book a Demo", url='https://www.lyzr.ai/book-demo/', use_container_width = True)
         st.link_button("Discord", url='https://discord.gg/nm7zSyEFA2', use_container_width = True)
         st.link_button("Slack", url='https://join.slack.com/t/genaiforenterprise/shared_invite/zt-2a7fr38f7-_QDOY1W1WSlSiYNAEncLGw', use_container_width = True)
-    
